@@ -1,0 +1,1200 @@
+<!DOCTYPE html>
+<html lang="no">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Norges 100</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700&family=Inter:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+  :root {
+    --bg:         #23272e;
+    --surface:    #2c3038;
+    --raised:     #353a42;
+    --border:     #444950;
+    --border-hi:  #585e68;
+    --text:       #f2ede6;
+    --muted:      #9e9890;
+    --subtle:     #6a6660;
+    --gold:       #d4b06a;
+    --gold-dim:   #a8843e;
+    --gold-glow:  rgba(212,176,106,.18);
+    --green:      #3a7a52;
+    --green-hi:   #52a872;
+    --green-glow: rgba(58,122,82,.22);
+    --amber:      #c88040;
+    --amber-glow: rgba(200,128,64,.18);
+    --radius:     8px;
+  }
+
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'Inter', -apple-system, sans-serif;
+    font-weight: 400;
+    background: var(--bg);
+    color: var(--text);
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  /* ── Top bar ── */
+  #topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 0 1.5rem;
+    height: 72px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+    z-index: 1000;
+  }
+
+  .brand { display: flex; align-items: baseline; gap: .5rem; }
+
+  .brand-pre {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 34px;
+    font-weight: 600;
+    color: var(--text);
+    letter-spacing: .01em;
+  }
+
+  .brand-num {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 34px;
+    font-weight: 700;
+    color: var(--gold);
+  }
+
+  .brand-rule { width: 1px; height: 22px; background: var(--border-hi); margin: 0 .8rem; align-self: center; }
+
+  .brand-text-block { display: flex; flex-direction: column; gap: 2px; }
+
+  .brand-sub {
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: .14em;
+    text-transform: uppercase;
+    color: var(--muted);
+    line-height: 1;
+  }
+
+  .brand-desc {
+    font-size: 12px;
+    font-weight: 300;
+    color: var(--subtle);
+    letter-spacing: .01em;
+    line-height: 1;
+  }
+
+  #user-chip {
+    display: flex; align-items: center; gap: .55rem;
+    background: var(--raised); border: 1px solid var(--border);
+    border-radius: 20px; padding: 6px 16px 6px 8px;
+    font-size: 14px; color: var(--muted);
+    cursor: pointer; transition: border-color .15s, color .15s;
+  }
+  #user-chip:hover { border-color: var(--gold-dim); color: var(--text); }
+
+  .avatar {
+    width: 26px; height: 26px; border-radius: 50%;
+    background: var(--gold-dim); color: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 12px; font-weight: 700; flex-shrink: 0;
+  }
+
+  /* ── Progress ── */
+  #progress-bar-wrap {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: .7rem 1.5rem;
+    flex-shrink: 0;
+  }
+
+  .prog-row { display: flex; align-items: center; gap: 1rem; max-width: 700px; }
+
+  .prog-label {
+    font-size: 13px; font-weight: 600;
+    letter-spacing: .08em; text-transform: uppercase;
+    color: var(--muted); white-space: nowrap; min-width: 136px;
+  }
+
+  .prog-track { flex: 1; height: 2px; background: var(--border); border-radius: 2px; overflow: hidden; }
+
+  .prog-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--gold-dim), var(--gold));
+    border-radius: 2px;
+    transition: width .6s cubic-bezier(.4,0,.2,1);
+    width: 0%;
+  }
+
+  .prog-pct { font-size: 14px; font-weight: 600; color: var(--gold); white-space: nowrap; min-width: 44px; text-align: right; }
+
+  /* ── Layout ── */
+  #layout { flex: 1; display: flex; overflow: hidden; }
+  #map { flex: 1; z-index: 1; }
+
+  /* Leaflet overrides */
+  .leaflet-control-zoom a { background: var(--raised) !important; color: var(--muted) !important; border-color: var(--border) !important; }
+  .leaflet-control-zoom a:hover { background: var(--border) !important; color: var(--text) !important; }
+  .leaflet-control-attribution { background: rgba(35,39,46,.85) !important; color: var(--muted) !important; font-size: 10px !important; }
+  .leaflet-control-attribution a { color: var(--muted) !important; }
+
+  /* ── Sidebar ── */
+  #sidebar {
+    width: 300px; background: var(--surface);
+    border-left: 1px solid var(--border);
+    display: flex; flex-direction: column;
+    flex-shrink: 0; overflow: hidden;
+  }
+
+  .sidebar-section { padding: 1.1rem 1.2rem; border-bottom: 1px solid var(--border); }
+
+  .sidebar-title {
+    font-size: 12px; font-weight: 700;
+    text-transform: uppercase; letter-spacing: .12em;
+    color: var(--muted); margin-bottom: .8rem;
+  }
+
+  #friend-input-row { display: flex; gap: .4rem; }
+
+  #friend-input {
+    flex: 1; font-size: 14px; font-family: 'Inter', sans-serif;
+    background: var(--raised); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 7px 10px;
+    color: var(--text); outline: none; transition: border-color .15s;
+  }
+  #friend-input::placeholder { color: var(--muted); }
+  #friend-input:focus { border-color: var(--gold-dim); }
+
+  #friend-btn {
+    background: var(--raised); border: 1px solid var(--gold-dim);
+    border-radius: var(--radius); padding: 7px 14px;
+    font-size: 13px; font-weight: 600; font-family: 'Inter', sans-serif;
+    color: var(--gold); cursor: pointer; letter-spacing: .04em;
+    transition: background .15s;
+  }
+  #friend-btn:hover { background: var(--gold-glow); }
+
+  #friend-list { margin-top: .7rem; display: flex; flex-direction: column; gap: .5rem; }
+
+  .friend-entry { display: flex; flex-direction: column; }
+
+  .friend-chip {
+    display: flex; align-items: center; gap: 8px;
+    background: var(--raised); border: 1px solid var(--border);
+    border-radius: 6px; padding: 8px 10px;
+    font-size: 13px; cursor: pointer;
+    transition: border-color .15s;
+  }
+  .friend-chip:hover { border-color: var(--border-hi); }
+
+  .friend-dot {
+    width: 10px; height: 10px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .friend-chip-name { flex: 1; font-weight: 600; }
+
+  .friend-chip-count { font-size: 12px; color: var(--muted); }
+
+  .friend-chip-arrow {
+    font-size: 10px; color: var(--muted);
+    transition: transform .2s;
+  }
+  .friend-chip-arrow.open { transform: rotate(180deg); }
+
+  .friend-chip-remove {
+    background: none; border: none; cursor: pointer;
+    color: var(--subtle); font-size: 15px; line-height: 1; padding: 0 0 0 4px;
+    transition: color .15s; flex-shrink: 0;
+  }
+  .friend-chip-remove:hover { color: #c07070; }
+
+  /* Friend detail panel */
+  .friend-detail {
+    display: none;
+    background: var(--bg);
+    border: 1px solid var(--border);
+    border-top: none;
+    border-radius: 0 0 6px 6px;
+    max-height: 220px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+  }
+
+  .friend-detail.open { display: block; }
+
+  .friend-detail-empty {
+    padding: 12px; font-size: 12px;
+    color: var(--subtle); font-style: italic; text-align: center;
+  }
+
+  .friend-peak-row {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 10px; cursor: pointer;
+    font-size: 12.5px; color: var(--muted);
+    border-bottom: 1px solid var(--border);
+    transition: background .1s;
+  }
+  .friend-peak-row:last-child { border-bottom: none; }
+  .friend-peak-row:hover { background: var(--raised); color: var(--text); }
+
+  .friend-peak-dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    flex-shrink: 0;
+  }
+
+  .friend-peak-num { width: 22px; text-align: right; font-size: 10px; color: var(--subtle); flex-shrink: 0; }
+  .friend-peak-name { flex: 1; }
+  .friend-peak-m { font-size: 11px; color: var(--subtle); white-space: nowrap; }
+
+  /* Peak list */
+  #peak-list-wrap {
+    flex: 1; overflow-y: auto; padding: .4rem;
+    scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+  }
+
+  .fylke-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 8px 5px;
+    margin-top: 6px;
+    font-size: 11px;
+    font-weight: 700;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--gold-dim);
+    border-bottom: 1px solid var(--border);
+    margin-bottom: 2px;
+  }
+
+  .fylke-header:first-child { margin-top: 2px; }
+
+  .fylke-count {
+    font-size: 10px;
+    font-weight: 500;
+    color: var(--subtle);
+    letter-spacing: 0;
+    text-transform: none;
+  }
+
+  .fylke-progress {
+    font-size: 10px;
+    color: var(--green-hi);
+    font-weight: 500;
+  }
+
+  .peak-row {
+    display: flex; align-items: center; gap: .5rem;
+    padding: 7px 8px; border-radius: 5px;
+    cursor: pointer; transition: background .12s;
+    font-size: 13.5px; color: var(--muted);
+  }
+  .peak-row:hover { background: var(--raised); color: var(--text); }
+  .peak-row.climbed { color: var(--green-hi); }
+  .peak-row .peak-num { width: 24px; text-align: right; font-size: 11px; color: var(--subtle); flex-shrink: 0; }
+  .peak-row .peak-name { flex: 1; }
+  .peak-row .peak-m { color: var(--subtle); font-size: 12px; white-space: nowrap; }
+  .peak-row .check { font-size: 11px; color: var(--green-hi); font-weight: 700; width: 14px; }
+
+  /* ── Popup ── */
+  .leaflet-popup-content-wrapper {
+    background: var(--raised) !important;
+    border: 1px solid var(--border-hi) !important;
+    border-radius: 10px !important;
+    box-shadow: 0 8px 32px rgba(0,0,0,.55) !important;
+    padding: 0 !important; overflow: hidden;
+  }
+  .leaflet-popup-content { margin: 0 !important; width: 320px !important; }
+  .leaflet-popup-tip { background: var(--raised) !important; }
+  .leaflet-popup-close-button { color: var(--muted) !important; top: 10px !important; right: 10px !important; font-size: 18px !important; }
+  .leaflet-popup-close-button:hover { color: var(--text) !important; }
+
+  .popup-img {
+    width: 100%;
+    height: 160px;
+    object-fit: cover;
+    object-position: center;
+    display: block;
+    background: var(--surface);
+  }
+
+  .popup-img-credit {
+    font-size: 10px;
+    color: var(--muted);
+    padding: 3px 10px;
+    background: var(--surface);
+    text-align: right;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .popup-inner { padding: 14px 16px 14px; }
+
+  .popup-rank {
+    font-size: 11px; font-weight: 600;
+    letter-spacing: .12em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 3px;
+  }
+
+  .popup-name {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 22px; font-weight: 600;
+    color: var(--text); line-height: 1.2; margin-bottom: 2px;
+  }
+
+  .popup-elev {
+    font-size: 16px; color: var(--gold);
+    font-weight: 600; letter-spacing: .01em; margin-bottom: 12px;
+  }
+
+  /* Info grid */
+  .popup-meta {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 6px; margin-bottom: 12px;
+  }
+
+  .popup-meta-item {
+    background: var(--surface);
+    border-radius: 6px; padding: 7px 9px;
+  }
+
+  .popup-meta-label {
+    font-size: 10px; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 2px;
+  }
+
+  .popup-meta-value {
+    font-size: 13px; font-weight: 500; color: var(--text);
+  }
+
+  /* Fact box */
+  .popup-fact {
+    background: var(--surface);
+    border-left: 2px solid var(--gold-dim);
+    border-radius: 0 6px 6px 0;
+    padding: 8px 10px;
+    font-size: 12.5px; color: var(--muted);
+    line-height: 1.55; margin-bottom: 12px;
+    font-style: italic;
+  }
+
+  /* Friends who climbed */
+  .popup-friends {
+    margin-bottom: 12px;
+  }
+
+  .popup-friends-label {
+    font-size: 10px; font-weight: 600;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 6px;
+  }
+
+  .popup-friends-list {
+    display: flex; flex-wrap: wrap; gap: 5px;
+  }
+
+  .popup-friend-tag {
+    background: var(--amber-glow);
+    border: 1px solid var(--amber);
+    border-radius: 12px;
+    padding: 3px 10px;
+    font-size: 12px; font-weight: 500;
+    color: var(--amber);
+  }
+
+  .popup-no-friends {
+    font-size: 12px; color: var(--subtle); font-style: italic;
+  }
+
+  /* Besteg button */
+  .popup-check-row {
+    display: flex; align-items: center; justify-content: center; gap: 12px;
+    background: var(--surface); border: 2px solid var(--border);
+    border-radius: var(--radius); padding: 14px 16px;
+    margin-bottom: 12px; cursor: pointer;
+    transition: border-color .18s, background .18s, transform .1s;
+  }
+  .popup-check-row:hover { border-color: var(--green-hi); background: var(--green-glow); transform: translateY(-1px); }
+  .popup-check-row:active { transform: translateY(0); }
+  .popup-check-row.is-climbed {
+    background: var(--green-glow); border-color: var(--green-hi);
+    box-shadow: 0 0 0 3px rgba(82,168,114,.15);
+  }
+
+  .custom-check {
+    width: 24px; height: 24px; border-radius: 6px;
+    border: 2px solid var(--border-hi); background: var(--bg);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; transition: all .18s;
+    font-size: 14px; font-weight: 900; color: #fff;
+  }
+  .popup-check-row:hover .custom-check { border-color: var(--green-hi); }
+  .is-climbed .custom-check { background: var(--green-hi); border-color: var(--green-hi); }
+
+  .popup-check-label {
+    font-size: 15px; font-weight: 700; letter-spacing: .02em;
+    color: var(--muted); text-transform: uppercase;
+  }
+  .popup-check-row:hover .popup-check-label { color: var(--green-hi); }
+  .is-climbed .popup-check-label { color: var(--green-hi); }
+
+  /* User photo upload */
+  .popup-photo-section { margin-bottom: 10px; }
+
+  .popup-user-photo {
+    width: 100%; height: 140px;
+    object-fit: cover; border-radius: 6px;
+    display: block; margin-bottom: 6px;
+  }
+
+  .popup-photo-actions { display: flex; gap: 6px; }
+
+  .popup-photo-btn {
+    flex: 1; background: var(--surface);
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 7px 8px; font-size: 11.5px; font-weight: 600;
+    font-family: 'Inter', sans-serif; letter-spacing: .06em;
+    text-transform: uppercase; color: var(--muted);
+    cursor: pointer; transition: border-color .15s, color .15s;
+    text-align: center;
+  }
+  .popup-photo-btn:hover { border-color: var(--gold-dim); color: var(--gold); }
+  .popup-photo-btn.danger:hover { border-color: #c05050; color: #c07070; }
+
+  .popup-comment-label {
+    font-size: 11px; font-weight: 600; letter-spacing: .1em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 5px;
+  }
+
+  .popup-comment {
+    width: 100%; font-size: 13.5px; font-family: 'Inter', sans-serif;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: var(--radius); padding: 9px 10px;
+    resize: vertical; min-height: 60px; color: var(--text);
+    outline: none; transition: border-color .15s; line-height: 1.5;
+  }
+  .popup-comment::placeholder { color: var(--subtle); }
+  .popup-comment:focus { border-color: var(--gold-dim); }
+
+  .popup-save-btn {
+    margin-top: 8px; width: 100%;
+    background: transparent; border: 1px solid var(--gold-dim);
+    border-radius: var(--radius); padding: 9px;
+    font-size: 12px; font-weight: 600; font-family: 'Inter', sans-serif;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--gold); cursor: pointer; transition: background .15s;
+  }
+  .popup-save-btn:hover { background: var(--gold-glow); }
+
+  /* ── Welcome modal ── */
+  #modal-overlay {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.78); backdrop-filter: blur(8px);
+    z-index: 9999;
+    display: flex; align-items: center; justify-content: center;
+    padding: 1rem;
+  }
+
+  #modal {
+    background: var(--raised); border: 1px solid var(--border-hi);
+    border-radius: 14px; padding: 2.5rem 2rem;
+    width: 100%; max-width: 360px;
+    box-shadow: 0 24px 80px rgba(0,0,0,.7);
+    text-align: center;
+    animation: popIn .28s cubic-bezier(.34,1.56,.64,1);
+  }
+
+  @keyframes popIn { from { transform: scale(.88); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+
+  .modal-eyebrow {
+    font-size: 12px; font-weight: 600; letter-spacing: .2em;
+    text-transform: uppercase; color: var(--gold-dim); margin-bottom: .9rem;
+  }
+
+  .modal-title {
+    font-family: 'Playfair Display', Georgia, serif;
+    font-size: 42px; font-weight: 700;
+    color: var(--text); margin-bottom: .5rem; line-height: 1;
+  }
+  .modal-title span { color: var(--gold); }
+
+  .modal-rule { width: 40px; height: 1px; background: var(--gold-dim); margin: 1rem auto; }
+
+  .modal-sub {
+    font-size: 15px; font-weight: 300;
+    color: var(--muted); margin-bottom: 1.8rem; line-height: 1.6;
+  }
+
+  #nick-input {
+    width: 100%; font-size: 16px; font-family: 'Inter', sans-serif;
+    font-weight: 500; background: var(--surface);
+    border: 1px solid var(--border-hi); border-radius: var(--radius);
+    padding: 11px 14px; margin-bottom: .75rem;
+    color: var(--text); text-align: center; outline: none;
+    transition: border-color .15s;
+  }
+  #nick-input::placeholder { color: var(--subtle); font-weight: 400; }
+  #nick-input:focus { border-color: var(--gold-dim); }
+
+  #nick-btn {
+    width: 100%; background: var(--gold-dim); border: none;
+    border-radius: var(--radius); padding: 13px;
+    font-size: 14px; font-weight: 600; font-family: 'Inter', sans-serif;
+    letter-spacing: .1em; text-transform: uppercase;
+    color: var(--bg); cursor: pointer; transition: background .15s;
+  }
+  #nick-btn:hover { background: var(--gold); }
+
+  /* ── Toast ── */
+  #toast {
+    position: fixed; bottom: 1.5rem; left: 50%;
+    transform: translateX(-50%);
+    background: var(--raised); border: 1px solid var(--border-hi);
+    color: var(--text); border-radius: 20px; padding: 9px 22px;
+    font-size: 14px; font-weight: 500; letter-spacing: .02em;
+    z-index: 9998; opacity: 0; pointer-events: none;
+    transition: opacity .2s; white-space: nowrap;
+    box-shadow: 0 4px 20px rgba(0,0,0,.4);
+  }
+  #toast.show { opacity: 1; }
+
+  @media (max-width: 640px) { #sidebar { display: none; } }
+</style>
+</head>
+<body>
+
+<div id="modal-overlay">
+  <div id="modal">
+    <div class="modal-eyebrow">Norsk fjellhistorie</div>
+    <div class="modal-title">Norges <span>100</span></div>
+    <div class="modal-rule"></div>
+    <div class="modal-sub">Logg hvilke av Norges 100 høyeste fjelltopper du har besteg. Velg et kallenavn for å komme i gang.</div>
+    <input id="nick-input" type="text" placeholder="Ditt kallenavn" maxlength="30" autocomplete="off"/>
+    <button id="nick-btn">Kom i gang</button>
+  </div>
+</div>
+
+<div id="topbar">
+  <div class="brand">
+    <span class="brand-pre">Norges</span>
+    <span class="brand-num">100</span>
+    <div class="brand-rule"></div>
+    <div class="brand-text-block">
+      <span class="brand-sub">Fjelltopper</span>
+      <span class="brand-desc">Logg dine bestigninger av Norges 100 høyeste topper</span>
+    </div>
+  </div>
+  <div id="user-chip" title="Bytt kallenavn">
+    <div class="avatar" id="avatar-letter">?</div>
+    <span id="nick-display">—</span>
+  </div>
+</div>
+
+<div id="progress-bar-wrap">
+  <div class="prog-row">
+    <div class="prog-label" id="prog-label">0 / 100 besteg</div>
+    <div class="prog-track"><div class="prog-fill" id="prog-fill"></div></div>
+    <div class="prog-pct" id="prog-pct">0%</div>
+  </div>
+</div>
+
+<div id="layout">
+  <div id="map"></div>
+  <div id="sidebar">
+    <div class="sidebar-section">
+      <div class="sidebar-title">Venner</div>
+      <div id="friend-input-row">
+        <input id="friend-input" type="text" placeholder="Venns kallenavn" maxlength="30"/>
+        <button id="friend-btn">Vis</button>
+      </div>
+      <div id="friend-list"></div>
+    </div>
+    <div class="sidebar-section">
+      <div class="sidebar-title">Alle topper</div>
+    </div>
+    <div id="peak-list-wrap"><div id="peak-list"></div></div>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ── Peak data ─────────────────────────────────────────────────────────────────
+// range: fjellkjede / massiv
+// prom:  topografisk prominens i meter (null = ukjent)
+// year:  første bestigning (null = ukjent)
+// fact:  interessant fakta
+const PEAKS = [
+  {id:1,  name:"Galdhøpiggen",                 m:2469, lat:61.6361, lng:8.3122,  kommune:"Lom",           range:"Jotunheimen",    prom:2436, year:1850, fact:"Norges og Skandinavias høyeste fjell. En turisthytte på toppen serverer varm mat om sommeren.",                           img:"https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Galdh%C3%B8piggenFromFannar%C3%A5ki.jpg/500px-Galdh%C3%B8piggenFromFannar%C3%A5ki.jpg"},
+  {id:2,  name:"Glittertinden",                m:2452, lat:61.6531, lng:8.5436,  kommune:"Lom",           range:"Jotunheimen",    prom:975,  year:1841, fact:"Rivaliserte lenge med Galdhøpiggen om høyeste-tittelen. Nedsmeltende isbre har avgjort kappløpet.",                img:"https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Glittertind.jpg/500px-Glittertind.jpg"},
+  {id:3,  name:"Store Skagastølstind",         m:2405, lat:61.4664, lng:7.8722,  kommune:"Luster / Årdal",range:"Hurrungane",     prom:1024, year:1876, fact:"Et av Norges mest teknisk krevende fjell. Første bestigning av William Cecil Slingsby i 1876.",                      img:"https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Storen_1986.jpg/500px-Storen_1986.jpg"},
+  {id:4,  name:"Store Styggedalstind",         m:2387, lat:61.5003, lng:7.8975,  kommune:"Luster",        range:"Hurrungane",     prom:null, year:null, fact:null,                                                                                                                   img:null},
+  {id:5,  name:"Skardstinden, Store",          m:2373, lat:61.5785, lng:8.2214,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null,                                                                                                                   img:null},
+  {id:6,  name:"Veslpiggen",                   m:2369, lat:61.6341, lng:8.3006,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:"Navnet betyr 'den lille piggen' — sett i kontrast til nabofjell Galdhøpiggen.",                                        img:"https://upload.wikimedia.org/wikipedia/commons/thumb/9/96/Veslepiggen.jpg/500px-Veslepiggen.jpg"},
+  {id:7,  name:"Surtningssue",                 m:2368, lat:61.6209, lng:8.5113,  kommune:"Lom / Vågå",   range:"Jotunheimen",    prom:null, year:null, fact:"Navnet betyr 'svartgrisen' på gammel norsk.",                                                              img:"https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Surtningssue%2C_2005.jpg/500px-Surtningssue%2C_2005.jpg"},
+  {id:8,  name:"Store Memurutinden",           m:2366, lat:61.6006, lng:8.5752,  kommune:"Lom",           range:"Jotunheimen",    prom:331,  year:null, fact:null},
+  {id:9,  name:"Gjertvasstind",                m:2351, lat:61.4856, lng:7.8561,  kommune:"Luster",        range:"Hurrungane",     prom:null, year:null, fact:null},
+  {id:10, name:"Sentraltind",                  m:2348, lat:61.4612, lng:7.9094,  kommune:"Luster",        range:"Hurrungane",     prom:null, year:null, fact:null},
+  {id:11, name:"Heillstugutinden, Store",      m:2345, lat:61.6021, lng:8.4875,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:12, name:"Storjuvtinden",                m:2344, lat:61.5929, lng:8.4010,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:"Kan nås fra Geitsætri i Leirdalen uten breovergang — populær rute for erfarne fjellvandrere."},
+  {id:13, name:"Knutsholstinden, Store",       m:2341, lat:61.7185, lng:8.8542,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:14, name:"Skagastølstind, Vetle",        m:2340, lat:61.4623, lng:7.8893,  kommune:"Luster",        range:"Hurrungane",     prom:null, year:null, fact:null},
+  {id:15, name:"Heillstugutinden, Midtre",     m:2339, lat:61.6001, lng:8.4772,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:16, name:"Tjønnholstinden",              m:2331, lat:61.7062, lng:8.8113,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:17, name:"Leirhøe",                      m:2330, lat:61.5723, lng:8.3562,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null,                                                                                                                   img:"https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Leirh%C3%B8e.JPG/500px-Leirh%C3%B8e.JPG"},
+  {id:18, name:"Bukkehøi",                     m:2314, lat:61.5887, lng:8.2874,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:19, name:"Tverråtinden, Store",          m:2309, lat:61.5812, lng:8.4232,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:20, name:"Tverråtinden, Midtre",         m:2302, lat:61.5793, lng:8.4196,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:21, name:"Austre Memurutinden",          m:2301, lat:61.5985, lng:8.5893,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:22, name:"Trollsteineggi",               m:2296, lat:61.5671, lng:8.3744,  kommune:"Lom",           range:"Jotunheimen",    prom:103,  year:null, fact:null,                                                                                                                   img:"https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Trollsteineggje_sett_fra_Glittertinden.JPG/500px-Trollsteineggje_sett_fra_Glittertinden.JPG"},
+  {id:23, name:"Leirungstinden, Østre",        m:2288, lat:61.6921, lng:8.8634,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:24, name:"Snøhetta, Store",              m:2286, lat:62.3302, lng:9.2720,  kommune:"Dovre",         range:"Dovrefjell",     prom:1675, year:1798, fact:"Høyeste topp utenfor Jotunheimen. Hjemsted for en av Europas siste villreinstammer og moskus.",                    img:"https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Snohetta.jpg/500px-Snohetta.jpg"},
+  {id:25, name:"Galdhøe",                      m:2283, lat:61.6284, lng:8.3344,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:26, name:"Vestre Memurutindan V-1",      m:2280, lat:61.5912, lng:8.5543,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:27, name:"Beerenberg",                   m:2277, lat:71.0858, lng:-8.1522, kommune:"Jan Mayen",     range:"Jan Mayen",      prom:2277, year:null, fact:"Verdens nordligste aktive vulkan. Siste utbrudd i 1985. Synlig fra over 100 km avstand.",                      img:"https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Beerenberg_Jan_Mayen.JPG/500px-Beerenberg_Jan_Mayen.JPG"},
+  {id:28, name:"Søre Veotinden",               m:2267, lat:61.6348, lng:8.6312,  kommune:"Lom / Vågå",   range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:29, name:"Mesmogtinden",                 m:2264, lat:61.7341, lng:8.8967,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:30, name:"Snøhetta, Vestre",             m:2261, lat:62.3281, lng:9.2634,  kommune:"Dovre",         range:"Dovrefjell",     prom:null, year:null, fact:null},
+  {id:31, name:"Bakarste Storgrovhøe",         m:2259, lat:61.5534, lng:8.3112,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:32, name:"Besshøi",                      m:2258, lat:61.6876, lng:8.8234,  kommune:"Vågå",          range:"Jotunheimen",    prom:848,  year:null, fact:"Ligger ved siden av Besseggen — en av Norges mest kjente fjellruter, beskrevet av Ibsen i Peer Gynt.",             img:"https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Besseggen_ridge.jpg/500px-Besseggen_ridge.jpg"},
+  {id:33, name:"Nautgardstinden",              m:2258, lat:61.6012, lng:8.5256,  kommune:"Lom / Vågå",   range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:34, name:"Heillstugutinden, Nestsøre",   m:2255, lat:61.5989, lng:8.4673,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:35, name:"Fremste Storgrovhøe",          m:2253, lat:61.5512, lng:8.3089,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:36, name:"Leirungstinden, Vestre",       m:2250, lat:61.6901, lng:8.8512,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:37, name:"Vestre Memurutindan V-3",      m:2243, lat:61.5884, lng:8.5432,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:38, name:"Store Veotinden",              m:2240, lat:61.6421, lng:8.6489,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:39, name:"Semeltinden",                  m:2236, lat:61.5643, lng:8.3543,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:40, name:"Visbretinden",                 m:2234, lat:61.5743, lng:8.3812,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:41, name:"Søraustre Styggehøbreatinden", m:2232, lat:61.6823, lng:8.8341,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:42, name:"Vestre Memurutindan V-4",      m:2230, lat:61.5861, lng:8.5378,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:43, name:"Høgdebrotet",                  m:2226, lat:61.6734, lng:8.8123,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:44, name:"Storebjørn",                   m:2222, lat:61.5923, lng:8.3234,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:45, name:"Nørdre Hellstugutinden",       m:2218, lat:61.6089, lng:8.4934,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:46, name:"Styggehøe",                    m:2213, lat:61.5678, lng:8.3923,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:47, name:"Bukkeholstinden, Store",       m:2213, lat:61.5821, lng:8.4456,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:48, name:"Skarvflytind, Søndre",         m:2210, lat:61.6712, lng:8.8678,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:49, name:"Storstyggesvånåtinden",        m:2209, lat:62.0123, lng:8.5234,  kommune:"Lesja",         range:"Dovrefjell",     prom:null, year:null, fact:null},
+  {id:50, name:"Kalvehøgde, Store",            m:2208, lat:61.5378, lng:8.1023,  kommune:"Vang / Vågå",  range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:51, name:"Smørstabbtinden, Store",       m:2208, lat:61.5956, lng:8.4678,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:52, name:"Langedalstinden",              m:2206, lat:61.5234, lng:8.0856,  kommune:"Vang / Vågå",  range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:53, name:"Knutsholstinden, Vesle",       m:2205, lat:61.7123, lng:8.8476,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:54, name:"Austanbottstind, Store",       m:2203, lat:61.5123, lng:7.9534,  kommune:"Luster / Årdal",range:"Hurrungane",    prom:null, year:null, fact:null},
+  {id:55, name:"Hakluyttoppen",                m:2203, lat:71.0523, lng:-8.1723, kommune:"Jan Mayen",     range:"Jan Mayen",      prom:null, year:null, fact:"Oppkalt etter den nederlandske oppdageren Richard Hakluyt. Del av Beerenberng-massivet."},
+  {id:56, name:"Nørdre Trollsteinhøe",         m:2201, lat:61.5534, lng:8.3678,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:57, name:"Søre Blåbreahøe",              m:2196, lat:61.6234, lng:8.7891,  kommune:"Lom / Vågå",   range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:58, name:"Kvitskardtinden",              m:2193, lat:61.5123, lng:8.0534,  kommune:"Vang / Vågå",  range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:59, name:"Slettmarkhøe",                 m:2190, lat:61.5678, lng:8.4123,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:60, name:"Saksi",                        m:2189, lat:61.5834, lng:8.4312,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:61, name:"Heillstugutinden, Søre",       m:2189, lat:61.5967, lng:8.4589,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:62, name:"Knutsholstinden, Nordre",      m:2185, lat:61.7234, lng:8.8612,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:63, name:"Veobrehesten",                 m:2185, lat:61.6123, lng:8.5934,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:64, name:"Veobretinden",                 m:2183, lat:61.6089, lng:8.5867,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:65, name:"Rondslottet",                  m:2178, lat:61.9085, lng:9.7750,  kommune:"Folldal / Dovre",range:"Rondane",       prom:1230, year:null, fact:"Høyeste topp i Rondane nasjonalpark. Navnet betyr 'slottet i Rondane'. Kjent for sin særpregede form.",          img:"https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/RondslottetFromVeslesmeden.jpg/500px-RondslottetFromVeslesmeden.jpg"},
+  {id:66, name:"Kalvehøgde, Østre",            m:2178, lat:61.5312, lng:8.1123,  kommune:"Vang / Vågå",  range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:67, name:"Stornubben, Store",            m:2174, lat:61.6256, lng:8.7423,  kommune:"Lom / Vågå",   range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:68, name:"Hestbreapiggen, Nørdre",       m:2172, lat:61.7123, lng:8.2345,  kommune:"Skjåk",         range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:69, name:"Loftet",                       m:2170, lat:61.5756, lng:8.3989,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:70, name:"Trollsteinrundhøe",            m:2170, lat:61.5623, lng:8.3712,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:71, name:"Store Rauddalseggje",          m:2168, lat:61.5234, lng:7.9123,  kommune:"Luster",        range:"Hurrungane",     prom:null, year:null, fact:null},
+  {id:72, name:"Nørdre Styggehøbreatinden",    m:2168, lat:61.6834, lng:8.8423,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:73, name:"Skagastølstindene, Nordre",    m:2167, lat:61.4712, lng:7.8823,  kommune:"Luster",        range:"Hurrungane",     prom:null, year:null, fact:null},
+  {id:74, name:"Bukkeholstindan, Vestre",      m:2166, lat:61.5789, lng:8.4534,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:75, name:"Svartdalspiggen, Store",       m:2165, lat:61.6123, lng:8.7678,  kommune:"Lom / Vågå",   range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:76, name:"Nørdre Blåbreahøe",            m:2165, lat:61.6278, lng:8.7978,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:77, name:"Slettmarkpiggen",              m:2163, lat:61.5556, lng:8.1234,  kommune:"Lom / Vang",   range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:78, name:"Store Tverrbottinden",         m:2161, lat:61.5923, lng:8.4789,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:79, name:"Hestbreapiggen, Midtre",       m:2160, lat:61.7056, lng:8.2423,  kommune:"Skjåk",         range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:80, name:"Skarddalseggje",               m:2159, lat:61.5712, lng:8.2567,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:81, name:"Urdanostinden",                m:2157, lat:61.5023, lng:7.9789,  kommune:"Luster / Årdal",range:"Hurrungane",    prom:null, year:null, fact:null},
+  {id:82, name:"Rauddalstind, Store",          m:2157, lat:61.5178, lng:7.9456,  kommune:"Luster",        range:"Hurrungane",     prom:null, year:null, fact:null},
+  {id:83, name:"Veslfjelltinden",              m:2157, lat:61.5845, lng:8.4689,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:84, name:"Gråhøe",                       m:2154, lat:61.5567, lng:8.3834,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:85, name:"Skarvflytind, Midtre",         m:2154, lat:61.6734, lng:8.8612,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:86, name:"Bukkeholstindan, Midtre",      m:2154, lat:61.5801, lng:8.4512,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:87, name:"Midtre Tverrbottinden, Nord",  m:2151, lat:61.5901, lng:8.4712,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:88, name:"Veslebjørn, Søndre",           m:2150, lat:61.5878, lng:8.3123,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:89, name:"Bukkeholstindan, Nordre",      m:2149, lat:61.5812, lng:8.4489,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:90, name:"Dyrhaugstinden, Store",        m:2147, lat:61.5367, lng:7.8978,  kommune:"Luster",        range:"Hurrungane",     prom:null, year:null, fact:null},
+  {id:91, name:"Semelholstinden",              m:2147, lat:61.5612, lng:8.3612,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:92, name:"Tjørnholsoksle",               m:2145, lat:61.7034, lng:8.8534,  kommune:"Vågå",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:93, name:"Hestbrepiggen, Midtre-2",      m:2143, lat:61.7023, lng:8.2398,  kommune:"Skjåk",         range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:94, name:"Ryggjehøe",                    m:2142, lat:61.5745, lng:8.4067,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:95, name:"Snøholtinden",                 m:2141, lat:61.5189, lng:8.0923,  kommune:"Vang",          range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:96, name:"Vestre Memurutindan V-5",      m:2140, lat:61.5845, lng:8.5312,  kommune:"Lom",           range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:97, name:"Hestbrepiggen, Vestre",        m:2139, lat:61.7012, lng:8.2312,  kommune:"Lom / Skjåk",  range:"Jotunheimen",    prom:null, year:null, fact:null},
+  {id:98, name:"Storronden",                   m:2138, lat:61.8866, lng:9.8122,  kommune:"Sel",           range:"Rondane",        prom:385,  year:null, fact:"En av de mest populære 2000-meterstoppene i Rondane nasjonalpark.",                                             img:"https://upload.wikimedia.org/wikipedia/commons/thumb/5/51/Storronden_2138m.jpg/500px-Storronden_2138m.jpg"},
+  {id:99, name:"Mjølkedalstinden",             m:2137, lat:61.5089, lng:7.9234,  kommune:"Luster",        range:"Hurrungane",     prom:null, year:null, fact:null},
+  {id:100,name:"Lodalskåpa",                   m:2083, lat:61.7567, lng:7.1856,  kommune:"Luster / Stryn",range:"Jostedalsbreen", prom:null, year:1820, fact:"Iskledd nunatak i Jostedalsbreen. En av Norges vakreste fjellformer, med dramatisk utsikt over breen.",          img:"https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Lodalsk%C3%A5paFromFannar%C3%A5ki.jpg/500px-Lodalsk%C3%A5paFromFannar%C3%A5ki.jpg"},
+];
+
+// ── Images ───────────────────────────────────────────────────────────────────
+// Fallback photo per fjellkjede
+const RANGE_IMGS = {
+  "Jotunheimen":    "https://upload.wikimedia.org/wikipedia/commons/thumb/8/83/Utsiktgald1.jpg/500px-Utsiktgald1.jpg",
+  "Hurrungane":     "https://upload.wikimedia.org/wikipedia/commons/thumb/3/3a/Hurrungane_towards_west.JPG/500px-Hurrungane_towards_west.JPG",
+  "Dovrefjell":     "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Snohetta.jpg/500px-Snohetta.jpg",
+  "Rondane":        "https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/RondslottetFromVeslesmeden.jpg/500px-RondslottetFromVeslesmeden.jpg",
+  "Jostedalsbreen": "https://upload.wikimedia.org/wikipedia/commons/thumb/f/f5/P1000290Jostedalsbreen.JPG/500px-P1000290Jostedalsbreen.JPG",
+  "Jan Mayen":      "https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/JanMayen.jpg/500px-JanMayen.jpg",
+};
+
+// Specific Wikipedia photos per peak ID (override range fallback)
+const PEAK_IMGS = {
+  1:  "https://upload.wikimedia.org/wikipedia/commons/thumb/9/98/Galdh%C3%B8piggenFromFannar%C3%A5ki.jpg/500px-Galdh%C3%B8piggenFromFannar%C3%A5ki.jpg",
+  2:  "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ce/Glittertind.jpg/500px-Glittertind.jpg",
+  3:  "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Storen_1986.jpg/500px-Storen_1986.jpg",
+  4:  "https://upload.wikimedia.org/wikipedia/commons/thumb/3/33/Gjertvasstind_og_Styggedalstind.jpg/500px-Gjertvasstind_og_Styggedalstind.jpg",
+  5:  "https://upload.wikimedia.org/wikipedia/commons/thumb/9/96/Skarstind.JPG/500px-Skarstind.JPG",
+  6:  "https://upload.wikimedia.org/wikipedia/commons/thumb/9/96/Veslepiggen.jpg/500px-Veslepiggen.jpg",
+  7:  "https://upload.wikimedia.org/wikipedia/commons/thumb/1/1c/Surtningssue%2C_2005.jpg/500px-Surtningssue%2C_2005.jpg",
+  8:  "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Memurutindane.jpg/500px-Memurutindane.jpg",
+  9:  "https://upload.wikimedia.org/wikipedia/commons/thumb/9/90/Jervvasstind_2004.jpg/500px-Jervvasstind_2004.jpg",
+  10: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Skagast%C3%B8lstindane_1986.jpg/500px-Skagast%C3%B8lstindane_1986.jpg",
+  13: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Store_Knutsholstinden_2005.jpg/500px-Store_Knutsholstinden_2005.jpg",
+  14: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Skagast%C3%B8lstindane_1986.jpg/500px-Skagast%C3%B8lstindane_1986.jpg",
+  16: "https://upload.wikimedia.org/wikipedia/commons/thumb/5/52/Tj%C3%B8nnholstinden_2005.jpg/500px-Tj%C3%B8nnholstinden_2005.jpg",
+  17: "https://upload.wikimedia.org/wikipedia/commons/thumb/b/b8/Leirh%C3%B8e.JPG/500px-Leirh%C3%B8e.JPG",
+  21: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Memurutindane.jpg/500px-Memurutindane.jpg",
+  22: "https://upload.wikimedia.org/wikipedia/commons/thumb/2/23/Trollsteineggje_sett_fra_Glittertinden.JPG/500px-Trollsteineggje_sett_fra_Glittertinden.JPG",
+  24: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Snohetta.jpg/500px-Snohetta.jpg",
+  26: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Memurutindane.jpg/500px-Memurutindane.jpg",
+  27: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Beerenberg_Jan_Mayen.JPG/500px-Beerenberg_Jan_Mayen.JPG",
+  30: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/c8/Snohetta.jpg/500px-Snohetta.jpg",
+  32: "https://upload.wikimedia.org/wikipedia/commons/thumb/a/a2/Besseggen_ridge.jpg/500px-Besseggen_ridge.jpg",
+  33: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9d/Nautgardstind.jpg/500px-Nautgardstind.jpg",
+  37: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Memurutindane.jpg/500px-Memurutindane.jpg",
+  42: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Memurutindane.jpg/500px-Memurutindane.jpg",
+  53: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Store_Knutsholstinden_2005.jpg/500px-Store_Knutsholstinden_2005.jpg",
+  55: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/JanMayen.jpg/500px-JanMayen.jpg",
+  62: "https://upload.wikimedia.org/wikipedia/commons/thumb/9/9b/Store_Knutsholstinden_2005.jpg/500px-Store_Knutsholstinden_2005.jpg",
+  65: "https://upload.wikimedia.org/wikipedia/commons/thumb/1/13/RondslottetFromVeslesmeden.jpg/500px-RondslottetFromVeslesmeden.jpg",
+  73: "https://upload.wikimedia.org/wikipedia/commons/thumb/d/d8/Skagast%C3%B8lstindane_1986.jpg/500px-Skagast%C3%B8lstindane_1986.jpg",
+  96: "https://upload.wikimedia.org/wikipedia/commons/thumb/8/86/Memurutindane.jpg/500px-Memurutindane.jpg",
+  99: "https://upload.wikimedia.org/wikipedia/commons/thumb/c/ca/Olavsbunuten_and_Mj%C3%B8lkedalstinden_in_Jotunheimen.jpg/500px-Olavsbunuten_and_Mj%C3%B8lkedalstinden_in_Jotunheimen.jpg",
+  100:"https://upload.wikimedia.org/wikipedia/commons/thumb/1/1a/Lodalsk%C3%A5paFromFannar%C3%A5ki.jpg/500px-Lodalsk%C3%A5paFromFannar%C3%A5ki.jpg",
+};
+
+function peakImg(pk) {
+  return PEAK_IMGS[pk.id] || pk.img || RANGE_IMGS[pk.range] || null;
+}
+
+function getFylke(pk) {
+  if (/jan mayen/i.test(pk.kommune)) return 'Jan Mayen';
+  if (/luster|årdal|stryn/i.test(pk.kommune)) return 'Vestland';
+  return 'Innlandet';
+}
+
+// ── Friend colors ─────────────────────────────────────────────────────────────
+const FRIEND_COLORS = ['#e05c72','#5c9de0','#9b5ce0','#5cb8e0','#e08c5c','#c05ce0','#5ce0b0','#e0c05c'];
+function getFriendColor(nick) {
+  const idx = friends.indexOf(nick);
+  return FRIEND_COLORS[idx % FRIEND_COLORS.length];
+}
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let currentNick    = null;
+let friends        = [];
+let markers        = {};
+let activeFriend   = null; // which friend's detail panel is open
+
+function storageKey(nick) { return 'norges100_' + nick; }
+function loadData(nick)   { try { return JSON.parse(localStorage.getItem(storageKey(nick))) || {}; } catch { return {}; } }
+function saveData(nick,d) { localStorage.setItem(storageKey(nick), JSON.stringify(d)); }
+function getData(nick)    { return loadData(nick); }
+function peak(id)         { return PEAKS[id - 1]; }
+
+// ── Map ───────────────────────────────────────────────────────────────────────
+const map = L.map('map', { center: [62.8, 9.0], zoom: 6, zoomControl: true });
+
+L.tileLayer('https://cache.kartverket.no/v1/wmts/1.0.0/topo/default/webmercator/{z}/{y}/{x}.png', {
+  attribution: '&copy; <a href="https://www.kartverket.no/">Kartverket</a>',
+  maxZoom: 18,
+}).addTo(map);
+
+// ── Mountain SVG icon ─────────────────────────────────────────────────────────
+// friendColor: null = own peak (grey/green), or hex string = friend's color
+function makeIcon(climbed, friendColor) {
+  let body, snow, stroke;
+  if (climbed) {
+    body = '#52a872'; snow = 'rgba(255,255,255,0.35)'; stroke = '#2e6644';
+  } else if (friendColor) {
+    body = friendColor;
+    stroke = friendColor + 'bb';
+    snow = 'rgba(255,255,255,0.3)';
+  } else {
+    body = '#8c929a'; snow = 'rgba(255,255,255,0.28)'; stroke = '#5a6070';
+  }
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 28 24" width="28" height="24">
+    <polygon points="14,1 27,23 1,23" fill="${body}" stroke="${stroke}" stroke-width="1.2" stroke-linejoin="round"/>
+    <polygon points="10,12 14,5 18,12" fill="${snow}"/>
+  </svg>`;
+  return L.divIcon({ html: svg, className: '', iconSize: [28, 24], iconAnchor: [14, 24], popupAnchor: [0, -26] });
+}
+
+// ── Popup ─────────────────────────────────────────────────────────────────────
+function buildPopup(pk) {
+  const data    = getData(currentNick || '__guest__');
+  const entry   = data[pk.id] || {};
+  const climbed = !!entry.climbed;
+  const comment = entry.comment || '';
+
+  // Friends who climbed this peak
+  const climbedFriends = friends.filter(fn => {
+    const fd = getData(fn);
+    return fd[pk.id] && fd[pk.id].climbed;
+  });
+
+  const metaItems = [
+    { label: 'Fylke',       value: getFylke(pk) },
+    { label: 'Fjellkjede',  value: pk.range },
+    { label: 'Kommune',     value: pk.kommune },
+    ...(pk.prom ? [{ label: 'Prominens', value: pk.prom + ' m' }] : []),
+    ...(pk.year ? [{ label: 'Første bestigning', value: pk.year }] : []),
+  ];
+
+  const metaHTML = `<div class="popup-meta">
+    ${metaItems.map(i => `<div class="popup-meta-item">
+      <div class="popup-meta-label">${i.label}</div>
+      <div class="popup-meta-value">${i.value}</div>
+    </div>`).join('')}
+  </div>`;
+
+  const factHTML = pk.fact
+    ? `<div class="popup-fact">${pk.fact}</div>`
+    : '';
+
+  const friendsSection = friends.length > 0 ? `
+    <div class="popup-friends">
+      <div class="popup-friends-label">Venner som har besteg dette fjellet</div>
+      <div class="popup-friends-list">
+        ${climbedFriends.length > 0
+          ? climbedFriends.map(fn => {
+              const c = getFriendColor(fn);
+              return `<span class="popup-friend-tag" style="background:${c}22;border-color:${c};color:${c}">${fn}</span>`;
+            }).join('')
+          : `<span class="popup-no-friends">Ingen venner har besteg dette ennå</span>`}
+      </div>
+    </div>` : '';
+
+  const _img = peakImg(pk);
+  const imgHTML = _img
+    ? `<img class="popup-img" src="${_img}" alt="${pk.name}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='none'">
+       <div class="popup-img-credit">Foto: Wikimedia Commons</div>`
+    : '';
+
+  // User-uploaded photo (overrides Wikipedia photo)
+  const userPhoto = entry.userPhoto || null;
+  const displayImg = userPhoto || _img;
+  const displayImgCredit = userPhoto ? 'Ditt eget bilde' : 'Foto: Wikimedia Commons';
+  const finalImgHTML = displayImg
+    ? `<img class="popup-img" src="${displayImg}" alt="${pk.name}" id="pimg-${pk.id}" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='none'">
+       <div class="popup-img-credit">${displayImgCredit}</div>`
+    : '';
+
+  const photoSection = `
+    <div class="popup-photo-section">
+      <div class="popup-photo-actions">
+        <label class="popup-photo-btn" title="Last opp eget bilde">
+          Last opp bilde
+          <input type="file" accept="image/*" style="display:none" onchange="uploadPhoto(${pk.id}, this)">
+        </label>
+        ${userPhoto ? `<button class="popup-photo-btn danger" onclick="removePhoto(${pk.id})">Fjern bilde</button>` : ''}
+      </div>
+    </div>`;
+
+  return `${finalImgHTML}<div class="popup-inner">
+    <div class="popup-rank">Nr. ${pk.id} &nbsp;&middot;&nbsp; ${pk.range}</div>
+    <div class="popup-name">${pk.name}</div>
+    <div class="popup-elev">${pk.m.toLocaleString('nb-NO')} moh.</div>
+    ${metaHTML}
+    ${factHTML}
+    ${friendsSection}
+    <div class="popup-check-row${climbed ? ' is-climbed' : ''}" id="pcr-${pk.id}" onclick="toggleClimbed(${pk.id})">
+      <div class="custom-check" id="pcc-${pk.id}">${climbed ? '&#10003;' : ''}</div>
+      <div class="popup-check-label">${climbed ? 'Besteg!' : 'Merk som besteg'}</div>
+    </div>
+    <div class="popup-comment-label">Notat</div>
+    <textarea class="popup-comment" id="cmt-${pk.id}" placeholder="Dato, vær, opplevelse…">${comment}</textarea>
+    <button class="popup-save-btn" onclick="saveComment(${pk.id})">Lagre notat</button>
+    ${photoSection}
+  </div>`;
+}
+
+// ── Marker logic ──────────────────────────────────────────────────────────────
+function getMarkerState(peakId) {
+  const data    = currentNick ? getData(currentNick) : {};
+  const climbed = !!(data[peakId] && data[peakId].climbed);
+  // Find first friend who has climbed this (if user hasn't)
+  let friendColor = null;
+  if (!climbed) {
+    for (const fn of friends) {
+      const fd = getData(fn);
+      if (fd[peakId] && fd[peakId].climbed) {
+        friendColor = getFriendColor(fn);
+        break;
+      }
+    }
+  }
+  return { climbed, friendColor };
+}
+
+function refreshMarker(peakId) {
+  const m = markers[peakId];
+  if (!m) return;
+  const { climbed, friendColor } = getMarkerState(peakId);
+  m.setIcon(makeIcon(climbed, friendColor));
+}
+
+function renderMarkers() {
+  PEAKS.forEach(pk => {
+    const { climbed, friendColor } = getMarkerState(pk.id);
+    const icon = makeIcon(climbed, friendColor);
+    if (markers[pk.id]) {
+      markers[pk.id].setIcon(icon);
+      markers[pk.id].setPopupContent(buildPopup(pk));
+    } else {
+      const m = L.marker([pk.lat, pk.lng], { icon })
+        .addTo(map)
+        .bindPopup(buildPopup(pk), { maxWidth: 320, minWidth: 300 });
+      m.on('popupopen', () => m.setPopupContent(buildPopup(pk)));
+      markers[pk.id] = m;
+    }
+  });
+}
+
+// ── Actions ───────────────────────────────────────────────────────────────────
+function toggleClimbed(peakId) {
+  if (!currentNick) return;
+  const data    = getData(currentNick);
+  const entry   = data[peakId] || {};
+  entry.climbed = !entry.climbed;
+  data[peakId]  = entry;
+  saveData(currentNick, data);
+
+  const row = document.getElementById('pcr-' + peakId);
+  const chk = document.getElementById('pcc-' + peakId);
+  if (row && chk) {
+    row.classList.toggle('is-climbed', entry.climbed);
+    chk.innerHTML = entry.climbed ? '&#10003;' : '';
+    row.querySelector('.popup-check-label').textContent = entry.climbed ? 'Besteg' : 'Merk som besteg';
+  }
+  refreshMarker(peakId);
+  updateProgress();
+  updatePeakList();
+  showToast(entry.climbed ? peak(peakId).name + ' registrert' : 'Fjernet fra listen');
+}
+
+function saveComment(peakId) {
+  if (!currentNick) return;
+  const ta = document.getElementById('cmt-' + peakId);
+  if (!ta) return;
+  const data = getData(currentNick);
+  data[peakId]         = data[peakId] || {};
+  data[peakId].comment = ta.value;
+  saveData(currentNick, data);
+  showToast('Notat lagret');
+}
+
+function uploadPhoto(peakId, input) {
+  if (!currentNick || !input.files || !input.files[0]) return;
+  const file = input.files[0];
+  if (file.size > 3 * 1024 * 1024) { showToast('Bildet er for stort (maks 3 MB)'); return; }
+  const reader = new FileReader();
+  reader.onload = e => {
+    const data = getData(currentNick);
+    data[peakId]            = data[peakId] || {};
+    data[peakId].userPhoto  = e.target.result;
+    saveData(currentNick, data);
+    // Refresh popup content
+    const m = markers[peakId];
+    if (m) { m.setPopupContent(buildPopup(peak(peakId))); }
+    showToast('Bilde lastet opp');
+  };
+  reader.readAsDataURL(file);
+}
+
+function removePhoto(peakId) {
+  if (!currentNick) return;
+  const data = getData(currentNick);
+  if (data[peakId]) { delete data[peakId].userPhoto; }
+  saveData(currentNick, data);
+  const m = markers[peakId];
+  if (m) { m.setPopupContent(buildPopup(peak(peakId))); }
+  showToast('Bilde fjernet');
+}
+
+// ── Progress ──────────────────────────────────────────────────────────────────
+function updateProgress() {
+  if (!currentNick) return;
+  const count = Object.values(getData(currentNick)).filter(e => e.climbed).length;
+  document.getElementById('prog-label').textContent = `${count} / 100 besteg`;
+  document.getElementById('prog-fill').style.width  = count + '%';
+  document.getElementById('prog-pct').textContent   = count + '%';
+}
+
+// ── Peak list ─────────────────────────────────────────────────────────────────
+function updatePeakList() {
+  const data = currentNick ? getData(currentNick) : {};
+  const list = document.getElementById('peak-list');
+  list.innerHTML = '';
+  PEAKS.forEach(pk => {
+    const climbed = !!(data[pk.id] && data[pk.id].climbed);
+    const row = document.createElement('div');
+    row.className = 'peak-row' + (climbed ? ' climbed' : '');
+    row.innerHTML = `
+      <span class="peak-num">${pk.id}</span>
+      <span class="peak-name">${pk.name}</span>
+      <span class="peak-m">${pk.m}m</span>
+      <span class="check">${climbed ? '&#10003;' : ''}</span>`;
+    row.onclick = () => {
+      map.setView([pk.lat, pk.lng], 11, { animate: true });
+      markers[pk.id]?.openPopup();
+    };
+    list.appendChild(row);
+  });
+}
+
+// ── Friends ───────────────────────────────────────────────────────────────────
+function renderFriends() {
+  const list = document.getElementById('friend-list');
+  list.innerHTML = '';
+
+  friends.forEach(fn => {
+    const fd    = getData(fn);
+    const color = getFriendColor(fn);
+    const climbedPeaks = PEAKS.filter(pk => fd[pk.id] && fd[pk.id].climbed);
+    const isOpen = activeFriend === fn;
+
+    // Wrapper
+    const entry = document.createElement('div');
+    entry.className = 'friend-entry';
+
+    // Chip row
+    const chip = document.createElement('div');
+    chip.className = 'friend-chip';
+    chip.style.borderColor = isOpen ? color : '';
+    chip.innerHTML = `
+      <div class="friend-dot" style="background:${color}"></div>
+      <span class="friend-chip-name" style="color:${color}">${fn}</span>
+      <span class="friend-chip-count">${climbedPeaks.length} topper</span>
+      <span class="friend-chip-arrow${isOpen ? ' open' : ''}">&#9660;</span>
+      <button class="friend-chip-remove" onclick="event.stopPropagation();removeFriend('${fn}')" title="Fjern">&#215;</button>`;
+    chip.addEventListener('click', () => toggleFriendDetail(fn));
+
+    // Detail panel
+    const detail = document.createElement('div');
+    detail.className = 'friend-detail' + (isOpen ? ' open' : '');
+    detail.id = 'fd-' + fn;
+
+    if (climbedPeaks.length === 0) {
+      detail.innerHTML = `<div class="friend-detail-empty">Ingen bestigninger registrert</div>`;
+    } else {
+      climbedPeaks.forEach(pk => {
+        const row = document.createElement('div');
+        row.className = 'friend-peak-row';
+        row.innerHTML = `
+          <div class="friend-peak-dot" style="background:${color}"></div>
+          <span class="friend-peak-num">${pk.id}</span>
+          <span class="friend-peak-name">${pk.name}</span>
+          <span class="friend-peak-m">${pk.m}m</span>`;
+        row.onclick = () => {
+          map.setView([pk.lat, pk.lng], 11, { animate: true });
+          markers[pk.id]?.openPopup();
+        };
+        detail.appendChild(row);
+      });
+    }
+
+    entry.appendChild(chip);
+    entry.appendChild(detail);
+    list.appendChild(entry);
+  });
+
+  renderMarkers();
+}
+
+function toggleFriendDetail(fn) {
+  activeFriend = activeFriend === fn ? null : fn;
+  renderFriends();
+}
+
+function addFriend() {
+  const inp = document.getElementById('friend-input');
+  const fn  = inp.value.trim();
+  if (!fn) return;
+  if (fn === currentNick)   { showToast('Det er deg selv'); return; }
+  if (friends.includes(fn)) { showToast('Allerede lagt til'); return; }
+  if (!Object.keys(getData(fn)).length) { showToast('Ingen data for dette kallenavnet'); return; }
+  friends.push(fn);
+  inp.value = '';
+  renderFriends();
+  showToast(fn + ' lagt til');
+}
+
+function removeFriend(fn) {
+  friends = friends.filter(f => f !== fn);
+  renderFriends();
+}
+
+document.getElementById('friend-btn').onclick     = addFriend;
+document.getElementById('friend-input').onkeydown = e => { if (e.key === 'Enter') addFriend(); };
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => el.classList.remove('show'), 2200);
+}
+
+// ── Nick ──────────────────────────────────────────────────────────────────────
+function setNick(nick) {
+  currentNick = nick;
+  localStorage.setItem('norges100_currentNick', nick);
+  document.getElementById('nick-display').textContent  = nick;
+  document.getElementById('avatar-letter').textContent = nick[0].toUpperCase();
+  document.getElementById('modal-overlay').style.display = 'none';
+  renderMarkers();
+  updateProgress();
+  updatePeakList();
+}
+
+document.getElementById('nick-btn').onclick = () => {
+  const v = document.getElementById('nick-input').value.trim();
+  if (!v) { showToast('Skriv inn et kallenavn'); return; }
+  setNick(v);
+};
+document.getElementById('nick-input').onkeydown = e => { if (e.key === 'Enter') document.getElementById('nick-btn').click(); };
+document.getElementById('user-chip').onclick = () => {
+  const n = prompt('Bytt kallenavn:', currentNick);
+  if (n && n.trim()) setNick(n.trim());
+};
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+const savedNick = localStorage.getItem('norges100_currentNick');
+if (savedNick) {
+  document.getElementById('nick-input').value = savedNick;
+  setNick(savedNick);
+} else {
+  currentNick = '__guest__';
+  renderMarkers();
+  updatePeakList();
+  currentNick = null;
+}
+</script>
+</body>
+</html>
